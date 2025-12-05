@@ -19,23 +19,29 @@ const LDAModel = @load LDA pkg=MultivariateStats verbosity=0
 
 # Topologías ANN relativamente ligeras (espacio LDA de baja dimensión)
 const ANN_TOPOLOGIES = [
-    [8],
-    [16],
-    [32],
-    [16, 8],
-    [32, 16],
+    [256],
+    [128, 64],
+    [256, 128],
+    [128, 128],
+    [256, 256],
+    [256, 128, 64],
+    [256, 256, 128],
+    [256, 256, 257]
 ]
 
 # Misma rejilla SVM/DT/kNN que en el enfoque subject-disjoint
 const SVM_CONFIGS = [
+    # Lineal
     Dict("kernel" => "linear", "C" => 0.1),
     Dict("kernel" => "linear", "C" => 1.0),
     Dict("kernel" => "linear", "C" => 10.0),
-    Dict("kernel" => "rbf",    "C" => 1.0,  "gamma" => 0.01),
-    Dict("kernel" => "rbf",    "C" => 10.0, "gamma" => 0.01),
-    Dict("kernel" => "rbf",    "C" => 10.0, "gamma" => 0.001),
-    Dict("kernel" => "poly",   "C" => 1.0,  "degree" => 2),
-    Dict("kernel" => "poly",   "C" => 1.0,  "degree" => 3),
+    # RBF
+    Dict("kernel" => "rbf", "C" => 1.0,  "gamma" => 0.01),
+    Dict("kernel" => "rbf", "C" => 10.0, "gamma" => 0.01),   # la que ya sabías que va bien
+    Dict("kernel" => "rbf", "C" => 100.0,"gamma" => 0.01),
+    # Poly
+    Dict("kernel" => "poly", "C" => 1.0, "degree" => 2),
+    Dict("kernel" => "poly", "C" => 1.0, "degree" => 3),
 ]
 
 const DT_CONFIGS = [
@@ -52,16 +58,6 @@ const KNN_CONFIGS = [
 #  Normalización adaptativa (ajuste en train, aplicación en test)
 # ------------------------------------------------------------------
 
-"""
-    adaptive_normalize_fit(X::AbstractMatrix)
-
-Ajusta, para cada característica, o bien un Z-score o un min-max en función
-de skewness/kurtosis. Devuelve:
-
-    X_norm :: Matrix
-    methods :: Vector{Symbol}    # :zscore o :minmax
-    params  :: Vector{NTuple{2,Float64}}  # (μ,σ) o (min,max)
-"""
 function adaptive_normalize_fit(X::AbstractMatrix{<:Real})
     N, D = size(X)
     X_norm = Array{Float64}(undef, N, D)
@@ -95,12 +91,6 @@ function adaptive_normalize_fit(X::AbstractMatrix{<:Real})
     return X_norm, methods, params
 end
 
-"""
-    adaptive_normalize_apply(X, methods, params)
-
-Aplica la normalización aprendida en `adaptive_normalize_fit` a un nuevo
-conjunto de datos (p. ej. test).
-"""
 function adaptive_normalize_apply(X::AbstractMatrix{<:Real},
                                   methods::Vector{Symbol},
                                   params::Vector{NTuple{2,Float64}})
@@ -136,11 +126,11 @@ function ann_hp_grid()
     [Dict{String,Any}(
         "topology"        => topo,
         "numExecutions"   => 1,
-        "maxEpochs"       => 250,
+        "maxEpochs"       => 600,
         "learningRate"    => 0.01,
-        "validationRatio" => 0.2,
-        "maxEpochsVal"    => 15,
-        "showText"        => false,
+        "validationRatio" => 0.1,
+        "maxEpochsVal"    => 20,
+        "showText"        => true,
     ) for topo in ANN_TOPOLOGIES]
 end
 
@@ -148,13 +138,6 @@ svm_hp_grid()  = SVM_CONFIGS
 dt_hp_grid()   = DT_CONFIGS
 knn_hp_grid()  = KNN_CONFIGS
 
-"""
-    train_mlj_model_and_predict(modelType, hp, Xtr, ytr, Xte)
-
-Construye el modelo MLJ correspondiente (SVM, DT, kNN) con los
-hiperparámetros `hp`, entrena en `(Xtr, ytr)` y devuelve etiquetas
-predichas (`Vector{String}`) para `Xte`.
-"""
 function train_mlj_model_and_predict(modelType::Symbol,
                                      hp::Dict{String,Any},
                                      Xtr::AbstractArray{<:Real,2},
@@ -180,10 +163,10 @@ function train_mlj_model_and_predict(modelType::Symbol,
         error("Modelo no soportado: $modelType")
     end
 
-    mach = machine(mdl, MLJ.table(Xtr), categorical(string.(ytr)))
-    fit!(mach, verbosity=0)
+    mach = MLJ.machine(mdl, MLJ.table(Xtr), categorical(string.(ytr)))
+    MLJ.fit!(mach, verbosity = 0)
 
-    yhat = predict(mach, MLJ.table(Xte))
+    yhat = MLJ.predict(mach, MLJ.table(Xte))
 
     if modelType in (:SVC, :SVM, :SVMClassifier)
         ŷ_labels = string.(yhat)           # SVC devuelve etiquetas directas
@@ -194,13 +177,6 @@ function train_mlj_model_and_predict(modelType::Symbol,
     return ŷ_labels
 end
 
-"""
-    majority_vote(preds)
-
-`preds`: Vector de vectores de etiquetas (un vector por modelo).
-
-Devuelve un vector con la etiqueta ganadora (mayoría) por muestra.
-"""
 function majority_vote(preds::Vector{Vector{String}})
     n_models = length(preds)
     @assert n_models > 0
@@ -240,7 +216,7 @@ function run_wism_autoencode_approach(; seed::Int = 1234)
     Random.seed!(seed)
 
     println("="^54)
-    @printf("%-54s\n", "  WISM autoencoder + LDA approach (Erik)  - seed = $seed")
+    @printf("%-54s\n", "  WISM autoencoder + LDA approach (Erik)")
     println("="^54 * "\n")
 
     # --------------------------------------------------------------
@@ -308,8 +284,8 @@ function run_wism_autoencode_approach(; seed::Int = 1234)
     println("Fitting LDA on normalized embeddings...")
 
     lda_model = LDAModel()
-    lda_mach  = machine(lda_model, MLJ.table(X_train_norm), categorical(y_train))
-    fit!(lda_mach, verbosity = 0)
+    lda_mach  = MLJ.machine(lda_model, MLJ.table(X_train_norm), categorical(y_train))
+    MLJ.fit!(lda_mach, verbosity = 0)
 
     train_lda_tbl = MLJ.transform(lda_mach, MLJ.table(X_train_norm))
     test_lda_tbl  = MLJ.transform(lda_mach, MLJ.table(X_test_norm))
@@ -319,6 +295,18 @@ function run_wism_autoencode_approach(; seed::Int = 1234)
 
     Ntr_lda, D_lda = size(X_train_lda)
     @printf("LDA space: %d samples, %d components\n\n", Ntr_lda, D_lda)
+
+    # Re-escalado de las 4 componentes LDA (0-mean, unit-std)
+    μ_lda = mean(X_train_lda, dims = 1)
+    σ_lda = std(X_train_lda, dims = 1)
+    σ_lda[σ_lda .== 0] .= 1e-6
+
+    X_train_lda = (X_train_lda .- μ_lda) ./ σ_lda
+    X_test_lda  = (X_test_lda  .- μ_lda) ./ σ_lda
+
+    # Para Flux
+    X_train_lda = Float32.(X_train_lda)
+    X_test_lda  = Float32.(X_test_lda)
 
     # Visualización simple LDA 2D (si hay >=2 componentes)
     if D_lda ≥ 2
@@ -364,6 +352,7 @@ function run_wism_autoencode_approach(; seed::Int = 1234)
     # 6) Grid de hiperparámetros y CV para ANN / SVM / DT / kNN
     # --------------------------------------------------------------
     # --- ANN ---
+    #=
     println("=== CV ANN (WISM + LDA) ===")
     ann_grid = ann_hp_grid()
     ann_results = Vector{NamedTuple}(undef, length(ann_grid))
@@ -400,6 +389,7 @@ function run_wism_autoencode_approach(; seed::Int = 1234)
     @printf(">> Best ANN idx = %d, acc = %.4f  |  %5d s\n\n",
             ann_best_idx, ann_best_acc, round(Int, total_training_time))
 
+    =#
     # --- SVM ---
     println("=== CV SVM (WISM + LDA) ===")
     svm_grid = svm_hp_grid()
@@ -533,6 +523,7 @@ function run_wism_autoencode_approach(; seed::Int = 1234)
     Y_train = ML1Utils.oneHotEncoding(y_train, classes)
     Y_test  = ML1Utils.oneHotEncoding(y_test,  classes)
 
+    #=
     # --- ANN final ---
     ann_best_hp  = ann_results[ann_best_idx].hp
     ann_topology = ann_best_hp["topology"]
@@ -557,6 +548,7 @@ function run_wism_autoencode_approach(; seed::Int = 1234)
     # Convertir preds ANN a etiquetas para el ensemble
     ann_onehot = ML1Utils.classifyOutputs(Y_pred_ann)
     y_pred_ann_labels = [classes[findfirst(ann_onehot[i, :])] for i in 1:size(ann_onehot, 1)]
+    =#
 
     # --- SVM final ---
     svm_best_hp = svm_results[svm_best_idx].hp
