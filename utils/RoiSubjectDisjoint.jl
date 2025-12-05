@@ -328,10 +328,12 @@ end
 # PIPELINE PRINCIPAL
 
 function run_subject_disjoint_approach(; seed::Int = 1234)
-    # A partir de aquí va el código que antes estaba suelto
-    # desde `Random.seed!(1234)` hasta el final del archivo
-
     Random.seed!(seed)
+
+    println("======================================================")
+    println("          Subject-disjoint approach (Roi)             ")
+    println("======================================================\n")
+
 
     # 1) Cargar y combinar dataset
     train_path = "./datasets/train.csv"
@@ -392,11 +394,13 @@ function run_subject_disjoint_approach(; seed::Int = 1234)
 
     # Gráfico: F-score vs. ranking de la feature
     ranks = 1:length(F_sorted)
-    plot(ranks, F_sorted,
+    p_fs = plot(ranks, F_sorted,
          xlabel = "Feature rank (sorted by decreasing F-score)",
          ylabel = "ANOVA F-score",
          legend = false,
          title  = "ANOVA F-scores over features")
+
+    display(p_fs)
 
     # Apply the selected Feature selection
     USE_FS  = true

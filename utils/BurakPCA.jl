@@ -6,9 +6,14 @@ using Statistics
 using MLJ
 using CategoricalArrays
 using Plots
-
-using ..ML1Utils
 import LIBSVM
+using ..ML1Utils
+
+# Cargar modelos una sola vez, al cargar el módulo
+const PCAModel  = MLJ.@load PCA pkg = MultivariateStats verbosity = 0
+const SVCModel  = MLJ.@load SVC pkg = LIBSVM verbosity = 0
+const DTModel   = MLJ.@load DecisionTreeClassifier pkg = DecisionTree verbosity = 0
+const KNNModel  = MLJ.@load KNNClassifier pkg = NearestNeighborModels verbosity = 0
 
 export run_pca_approach
 
@@ -109,7 +114,7 @@ function run_pca_approach(; seed::Int = 1234)
     Random.seed!(seed)
 
     println("======================================================")
-    println("        PCA-based approach (Burak) - seed = $seed     ")
+    println("              PCA-based approach (Burak)              ")
     println("======================================================\n")
 
     # -----------------------------
@@ -173,9 +178,8 @@ function run_pca_approach(; seed::Int = 1234)
     # -----------------------------
     # PCA (95% var)
     # -----------------------------
-    PCA = @load PCA pkg = MultivariateStats verbosity = 0
 
-    pca_model   = PCA(variance_ratio = 0.95)
+    pca_model   = PCAModel(variance_ratio = 0.95)
     pca_machine = machine(pca_model, MLJ.table(X_train_normalized))
     fit!(pca_machine, verbosity = 0)
 
@@ -203,7 +207,7 @@ function run_pca_approach(; seed::Int = 1234)
     threshold_results   = []
 
     for variance_ratio in variance_thresholds
-        pca_test      = PCA(variance_ratio = variance_ratio)
+        pca_test      = PCAModel(variance_ratio = variance_ratio)
         pca_mach_test = machine(pca_test, MLJ.table(X_train_normalized))
         fit!(pca_mach_test, verbosity = 0)
         X_temp = MLJ.matrix(transform(pca_mach_test, MLJ.table(X_train_normalized)))
@@ -227,7 +231,7 @@ function run_pca_approach(; seed::Int = 1234)
     # -----------------------------
     # PCA 2D para visualización
     # -----------------------------
-    pca_2d      = PCA(maxoutdim = 2)
+    pca_2d      = PCAModel(maxoutdim = 2)
     pca_2d_mach = machine(pca_2d, MLJ.table(X_train_normalized))
     fit!(pca_2d_mach, verbosity = 0)
     X_train_2d = MLJ.matrix(transform(pca_2d_mach, MLJ.table(X_train_normalized)))
@@ -325,31 +329,32 @@ function run_pca_approach(; seed::Int = 1234)
                 validationRatio = 0.2,
                 maxEpochsVal   = 10,
             )
-
-            acc_mean, acc_std = results[1]
-            err_mean, err_std = results[2]
-            sens_mean, sens_std = results[3]
-            spec_mean, spec_std = results[4]
-            ppv_mean, ppv_std   = results[5]
-            npv_mean, npv_std   = results[6]
-            f1_mean,  f1_std    = results[7]
-
-            println("  Accuracy:     $(round(acc_mean * 100, digits = 2))% ± $(round(acc_std * 100, digits = 2))%")
-            println("  Error Rate:   $(round(err_mean * 100, digits = 2))% ± $(round(err_std * 100, digits = 2))%")
-            println("  Sensitivity:  $(round(sens_mean, digits = 4)) ± $(round(sens_std, digits = 4))")
-            println("  Specificity:  $(round(spec_mean, digits = 4)) ± $(round(spec_std, digits = 4))")
-            println("  PPV:          $(round(ppv_mean,  digits = 4)) ± $(round(ppv_std,  digits = 4))")
-            println("  NPV:          $(round(npv_mean,  digits = 4)) ± $(round(npv_std,  digits = 4))")
-            println("  F1-Score:     $(round(f1_mean,   digits = 4)) ± $(round(f1_std,   digits = 4))")
-
-            push!(ann_results, (
-                topology = topology,
-                accuracy = acc_mean,
-                f1       = f1_mean,
-                time     = training_time,
-                results  = results,
-            ))
         end
+
+        acc_mean, acc_std = results[1]
+        err_mean, err_std = results[2]
+        sens_mean, sens_std = results[3]
+        spec_mean, spec_std = results[4]
+        ppv_mean, ppv_std   = results[5]
+        npv_mean, npv_std   = results[6]
+        f1_mean,  f1_std    = results[7]
+
+        println("  Accuracy:     $(round(acc_mean * 100, digits = 2))% ± $(round(acc_std * 100, digits = 2))%")
+        println("  Error Rate:   $(round(err_mean * 100, digits = 2))% ± $(round(err_std * 100, digits = 2))%")
+        println("  Sensitivity:  $(round(sens_mean, digits = 4)) ± $(round(sens_std, digits = 4))")
+        println("  Specificity:  $(round(spec_mean, digits = 4)) ± $(round(spec_std, digits = 4))")
+        println("  PPV:          $(round(ppv_mean,  digits = 4)) ± $(round(ppv_std,  digits = 4))")
+        println("  NPV:          $(round(npv_mean,  digits = 4)) ± $(round(npv_std,  digits = 4))")
+        println("  F1-Score:     $(round(f1_mean,   digits = 4)) ± $(round(f1_std,   digits = 4))")
+
+        push!(ann_results, (
+            topology = topology,
+            accuracy = acc_mean,
+            f1       = f1_mean,
+            time     = training_time,
+            results  = results,
+        ))
+        
 
         println("  Training time: $(round(training_time, digits = 2))s")
     end
@@ -396,21 +401,21 @@ function run_pca_approach(; seed::Int = 1234)
                 (X_train_pca, y_train),
                 cv_indices,
             )
-
-            acc_mean, acc_std = results[1]
-            f1_mean,  f1_std  = results[7]
-
-            println("  Accuracy:     $(round(acc_mean * 100, digits = 2))% ± $(round(acc_std * 100, digits = 2))%")
-            println("  F1-Score:     $(round(f1_mean, digits = 4)) ± $(round(f1_std, digits = 4))")
-
-            push!(svm_results, (
-                config   = config,
-                accuracy = acc_mean,
-                f1       = f1_mean,
-                time     = training_time,
-                results  = results,
-            ))
         end
+
+        acc_mean, acc_std = results[1]
+        f1_mean,  f1_std  = results[7]
+
+        println("  Accuracy:     $(round(acc_mean * 100, digits = 2))% ± $(round(acc_std * 100, digits = 2))%")
+        println("  F1-Score:     $(round(f1_mean, digits = 4)) ± $(round(f1_std, digits = 4))")
+
+        push!(svm_results, (
+            config   = config,
+            accuracy = acc_mean,
+            f1       = f1_mean,
+            time     = training_time,
+            results  = results,
+        ))
 
         println("  Training time: $(round(training_time, digits = 2))s")
     end
@@ -447,22 +452,22 @@ function run_pca_approach(; seed::Int = 1234)
                 (X_train_pca, y_train),
                 cv_indices,
             )
-
-            acc_mean, acc_std = results[1]
-            f1_mean,  f1_std  = results[7]
-
-            println("  Accuracy:     $(round(acc_mean * 100, digits = 2))% ± $(round(acc_std * 100, digits = 2))%")
-            println("  F1-Score:     $(round(f1_mean, digits = 4)) ± $(round(f1_std, digits = 4))")
-
-            push!(dt_results, (
-                max_depth = max_depth,
-                accuracy  = acc_mean,
-                f1        = f1_mean,
-                time      = training_time,
-                results   = results,
-            ))
         end
 
+        acc_mean, acc_std = results[1]
+        f1_mean,  f1_std  = results[7]
+
+        println("  Accuracy:     $(round(acc_mean * 100, digits = 2))% ± $(round(acc_std * 100, digits = 2))%")
+        println("  F1-Score:     $(round(f1_mean, digits = 4)) ± $(round(f1_std, digits = 4))")
+
+        push!(dt_results, (
+            max_depth = max_depth,
+            accuracy  = acc_mean,
+            f1        = f1_mean,
+            time      = training_time,
+            results   = results,
+        ))
+        
         println("  Training time: $(round(training_time, digits = 2))s")
     end
 
@@ -498,21 +503,21 @@ function run_pca_approach(; seed::Int = 1234)
                 (X_train_pca, y_train),
                 cv_indices,
             )
-
-            acc_mean, acc_std = results[1]
-            f1_mean,  f1_std  = results[7]
-
-            println("  Accuracy:     $(round(acc_mean * 100, digits = 2))% ± $(round(acc_std * 100, digits = 2))%")
-            println("  F1-Score:     $(round(f1_mean, digits = 4)) ± $(round(f1_std, digits = 4))")
-
-            push!(knn_results, (
-                k        = k,
-                accuracy = acc_mean,
-                f1       = f1_mean,
-                time     = training_time,
-                results  = results,
-            ))
         end
+
+        acc_mean, acc_std = results[1]
+        f1_mean,  f1_std  = results[7]
+
+        println("  Accuracy:     $(round(acc_mean * 100, digits = 2))% ± $(round(acc_std * 100, digits = 2))%")
+        println("  F1-Score:     $(round(f1_mean, digits = 4)) ± $(round(f1_std, digits = 4))")
+
+        push!(knn_results, (
+            k        = k,
+            accuracy = acc_mean,
+            f1       = f1_mean,
+            time     = training_time,
+            results  = results,
+        ))
 
         println("  Training time: $(round(training_time, digits = 2))s")
     end
@@ -659,7 +664,6 @@ function run_pca_approach(; seed::Int = 1234)
     best_svm_config = svm_results[best_svm].config
     println("\nTraining final SVM with config: ", best_svm_config)
 
-    SVC = @load SVC pkg = LIBSVM
 
     kernel_str = best_svm_config["kernel"]
     kernel = kernel_str == "linear" ? LIBSVM.Kernel.Linear :
@@ -667,7 +671,7 @@ function run_pca_approach(; seed::Int = 1234)
              kernel_str == "poly"   ? LIBSVM.Kernel.Polynomial :
              LIBSVM.Kernel.RadialBasis
 
-    svm_model = SVC(
+    svm_model = SVCModel(
         kernel = kernel,
         cost   = Float64(best_svm_config["C"]),
         gamma  = Float64(get(best_svm_config, "gamma", 0.01)),
@@ -696,8 +700,7 @@ function run_pca_approach(; seed::Int = 1234)
     best_dt_depth = dt_results[best_dt].max_depth
     println("\nTraining final Decision Tree with max_depth: ", best_dt_depth)
 
-    DTClassifier = @load DecisionTreeClassifier pkg = DecisionTree
-    dt_model = DTClassifier(max_depth = best_dt_depth, rng = Random.MersenneTwister(42))
+    dt_model = DTModel(max_depth = best_dt_depth, rng = Random.MersenneTwister(42))
 
     dt_mach = machine(dt_model, MLJ.table(X_train_pca), y_train_cat)
     fit!(dt_mach, verbosity = 0)
@@ -721,8 +724,7 @@ function run_pca_approach(; seed::Int = 1234)
     best_k = knn_results[best_knn].k
     println("\nTraining final kNN with k: ", best_k)
 
-    KNNClassifier = @load KNNClassifier pkg = NearestNeighborModels
-    knn_model = KNNClassifier(K = best_k)
+    knn_model = KNNModel(K = best_k)
 
     knn_mach = machine(knn_model, MLJ.table(X_train_pca), y_train_cat)
     fit!(knn_mach, verbosity = 0)
