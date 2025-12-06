@@ -352,7 +352,6 @@ function run_wism_autoencode_approach(; seed::Int = 1234)
     # 6) Grid de hiperparámetros y CV para ANN / SVM / DT / kNN
     # --------------------------------------------------------------
     # --- ANN ---
-    #=
     println("=== CV ANN (WISM + LDA) ===")
     ann_grid = ann_hp_grid()
     ann_results = Vector{NamedTuple}(undef, length(ann_grid))
@@ -386,10 +385,8 @@ function run_wism_autoencode_approach(; seed::Int = 1234)
         end
     end
 
-    @printf(">> Best ANN idx = %d, acc = %.4f  |  %5d s\n\n",
-            ann_best_idx, ann_best_acc, round(Int, total_training_time))
+    @printf(">> Best ANN idx = %d, acc = %.4f  |  %5d s\n\n", ann_best_idx, ann_best_acc, round(Int, total_training_time))
 
-    =#
     # --- SVM ---
     println("=== CV SVM (WISM + LDA) ===")
     svm_grid = svm_hp_grid()
@@ -523,7 +520,6 @@ function run_wism_autoencode_approach(; seed::Int = 1234)
     Y_train = ML1Utils.oneHotEncoding(y_train, classes)
     Y_test  = ML1Utils.oneHotEncoding(y_test,  classes)
 
-    #=
     # --- ANN final ---
     ann_best_hp  = ann_results[ann_best_idx].hp
     ann_topology = ann_best_hp["topology"]
@@ -548,7 +544,6 @@ function run_wism_autoencode_approach(; seed::Int = 1234)
     # Convertir preds ANN a etiquetas para el ensemble
     ann_onehot = ML1Utils.classifyOutputs(Y_pred_ann)
     y_pred_ann_labels = [classes[findfirst(ann_onehot[i, :])] for i in 1:size(ann_onehot, 1)]
-    =#
 
     # --- SVM final ---
     svm_best_hp = svm_results[svm_best_idx].hp

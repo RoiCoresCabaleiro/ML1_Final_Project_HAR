@@ -13,10 +13,9 @@ using .ErikWISMAutoencode
 
 
 function main()
+    res_pca     = run_pca_approach(; seed = 1234)
     res_wism    = run_wism_autoencode_approach(; seed=1234)
     res_subject = run_subject_disjoint_approach(; seed=1234)
-    res_pca     = run_pca_approach(; seed = 1234)
-    
 end
 
 main()
